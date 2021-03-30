@@ -40,13 +40,16 @@ Each task you can specify:
   - `NONE`: Just return the value from query
   - `DIFF`: Return the difference from the value from this query to the previous task
   - `PERC_DIFF`: Return the difference from the value from this query to the previous task as a percentage
+- **fillNullValue**: The value to use for null results, usually zero.
+- **invertResult**: Should the result be inverted? true|false (Alerts can only be set on positive values so this allows you to invert the result and alert upon it.)
 
 Additionally these settings should be set in terraform to control the alert conditions: (each task becomes a single condition in an single alert policy)
 
-- **alert_operator**:
+- **alert_operator**
 - **alert_critical_threshold**
 - **alert_warning_threshold**
 - **alert_threshold_occurrences**
+- **enabled**: true|false - if false then condition is created but not enabled
 
 Consult the [New Relic Terraform provider documentation](https://registry.terraform.io/providers/newrelic/newrelic/latest/docs/resources/nrql_alert_condition) for a guide on the values for these fields.
 
@@ -59,6 +62,8 @@ const TASKS = [{
     "accountId":"123456",
     "selector":"value",
     "chaining":"NONE",
+    "fillNullValue": 0,
+    "invertResult": false,
     "query":"FROM Public_APICall select uniqueCount(api) as value since 1 day ago"
 }]
 ```

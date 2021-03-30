@@ -11,11 +11,14 @@ variable "tasks" {
         query = string
         selector = string
         chaining = string
+        fillNullValue = number
+        invertResult = bool
 
         alert_operator = string
         alert_critical_threshold = number
         alert_warning_threshold = number
         alert_threshold_occurrences = string
+        enabled = bool
         
   }))
 }
@@ -65,6 +68,8 @@ data "template_file" "header_js" {
     "accountId":${jsonencode(task.accountId)},
     "selector":${jsonencode(task.selector)},
     "chaining":${jsonencode(task.chaining)},
+    "nullValue":${jsonencode(task.fillNullValue)},
+    "invertResult":${jsonencode(task.invertResult)},
     "query":${jsonencode(task.query)}
 },
 %{ endfor ~}]

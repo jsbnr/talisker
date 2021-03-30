@@ -11,6 +11,8 @@
 //     "accountId":"123456",
 //     "selector":"value",
 //     "chaining":"NONE",
+//     "fillNullValue": 0,
+//     "invertResult": false,
 //     "query":"FROM Public_APICall select uniqueCount(api) as value since 1 day ago"
 // },
 // ]
@@ -212,7 +214,7 @@ async function runtasks(tasks) {
 
                 //deal with null values (zero default unless specified)
                 if(result===null) {
-                    result = task.nullValue!==undefined ? task.nullValue : 0
+                    result = task.fillNullValue!==undefined ? task.fillNullValue : 0
                 }
 
                 //Check for chaining adjustments
@@ -229,6 +231,11 @@ async function runtasks(tasks) {
                     }
 
                 }
+
+                //Invert the result, alert conditions can only use positive thresholds :(
+                if(result!==undefined && task.invertResult===true) {
+                    result=0-result
+                } 
                 
                 if(result!==undefined) {
                     SUCCESSFUL_REQUESTS++
@@ -243,6 +250,7 @@ async function runtasks(tasks) {
                     }
                     metricPayload.attributes[`${NAMESPACE}.id`]=task.id
                     metricPayload.attributes[`${NAMESPACE}.name`]=task.name
+                    metricPayload.attributes[`${NAMESPACE}.inverted`]=(task.invertResult===true)? true : false
                     metricsInnerPayload.push(metricPayload)  
                 } else {
                     FAILED_REQUESTS++
