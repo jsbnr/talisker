@@ -163,6 +163,8 @@ const sendDataToNewRelic = async (data) =>  {
 
 
 
+
+
 async function runtasks(tasks) {
     let TOTALREQUESTS=0,SUCCESSFUL_REQUESTS=0,FAILED_REQUESTS=0
     let FAILURE_DETAIL = []
@@ -176,6 +178,9 @@ async function runtasks(tasks) {
               account(id: ${task.accountId}) {
                 nrql(query: "${task.query}") {
                   results
+                  metadata {
+                    facets
+                  }
                 }
               }
             }
@@ -198,26 +203,60 @@ async function runtasks(tasks) {
             try {
                 bodyJSON = JSON.parse(body)
 
+       
                 let resultData={}
                 let result=null
+                let facetResult = false
                 //deal with compare with queries
                 if(bodyJSON.data.actor.account.nrql.results.length==2 && bodyJSON.data.actor.account.nrql.results[0].comparison && bodyJSON.data.actor.account.nrql.results[0].comparison) {
                     let previous=_.get(bodyJSON.data.actor.account.nrql.results.find((item)=>{return item.comparison==="previous"}),task.selector)
                     let current=_.get(bodyJSON.data.actor.account.nrql.results.find((item)=>{return item.comparison==="current"}),task.selector)
                     result=((current-previous)/current) * 100
+                } else if(bodyJSON.data.actor.account.nrql.metadata &&
+                        bodyJSON.data.actor.account.nrql.metadata.facets && 
+                        bodyJSON.data.actor.account.nrql.metadata.facets.length > 0) {
+                        //faceted data
+                        facetResult=true
+                        result=bodyJSON.data.actor.account.nrql.results.map((result)=>{
+
+                            let facetArr={}
+                            bodyJSON.data.actor.account.nrql.metadata.facets.forEach((facet,idx)=>{
+                                if(result.facet[idx]!==null) {facetArr[`${NAMESPACE}.facet.${facet}`]=result.facet[idx]} //dont send null values
+                            })
+                            
+                            return {
+                                value: result.value,
+                                facets: facetArr
+                            }
+                        })
+                        
+     
                 } else {
+                     //simple single result data
                     resultData=bodyJSON.data.actor.account.nrql.results[0]
                     result=_.get(resultData, task.selector)
                 }
 
-                
+                const transformData = (data) => {
+                    let transformedResult=data
+                    //deal with null values (zero default unless specified)
+                    if(data===null) {
+                        transformedResult = task.fillNullValue!==undefined ? task.fillNullValue : 0
+                    }
 
-                //deal with null values (zero default unless specified)
-                if(result===null) {
-                    result = task.fillNullValue!==undefined ? task.fillNullValue : 0
+                    //Invert the result, alert conditions can only use positive thresholds :(
+                    if(data!==undefined && task.invertResult===true) {
+                        transformedResult=0-data
+                    } 
+                    return transformedResult
                 }
 
-                //Check for chaining adjustments
+                
+                if(Array.isArray(result)){
+                    result=result.map((x)=>{x.value=transformData(x.value); return x;})
+                } else {
+                result=transformData(result)
+                //Check for chaining adjustments (not valid for faceted data)
                 if(result!==undefined && task.chaining && task.chaining!="NONE") {
                     log(`Chaining mode [${task.chaining}]: current result: ${result}, previous task result: ${previousTaskResult}`)
                     switch (task.chaining) {
@@ -229,29 +268,44 @@ async function runtasks(tasks) {
                             result = result - previousTaskResult
                             break;
                     }
-
                 }
+            }
 
-                //Invert the result, alert conditions can only use positive thresholds :(
-                if(result!==undefined && task.invertResult===true) {
-                    result=0-result
-                } 
-                
+  
                 if(result!==undefined) {
                     SUCCESSFUL_REQUESTS++
-                    log(`Task succeeded with result: ${result}`)
+                    log(`Task succeeded with result: ${Array.isArray(result) ? `(faceted results: ${result.length})`: result}`)
                     previousTaskResult = result //support for chaining
-                    let metricPayload={
-                        name: `${NAMESPACE}.value`,
-                        type: "gauge",
-                        value: result,
-                        timestamp: Math.round(Date.now()/1000),
-                        attributes: {}
+
+                    const constructMetricPayload = (value,facets) =>{
+                        let metricPayload={
+                            name: `${NAMESPACE}.value`,
+                            type: "gauge",
+                            value: value,
+                            timestamp: Math.round(Date.now()/1000),
+                            attributes: {}
+                        }
+                        metricPayload.attributes[`${NAMESPACE}.id`]=task.id
+                        metricPayload.attributes[`${NAMESPACE}.name`]=task.name
+                        metricPayload.attributes[`${NAMESPACE}.inverted`]=(task.invertResult===true)? true : false
+
+                        if(facets) {
+                            metricPayload.attributes[`${NAMESPACE}.faceted`] = true
+                            metricPayload.attributes=Object.assign(metricPayload.attributes, facets)
+                        }                        
+                        metricsInnerPayload.push(metricPayload) 
                     }
-                    metricPayload.attributes[`${NAMESPACE}.id`]=task.id
-                    metricPayload.attributes[`${NAMESPACE}.name`]=task.name
-                    metricPayload.attributes[`${NAMESPACE}.inverted`]=(task.invertResult===true)? true : false
-                    metricsInnerPayload.push(metricPayload)  
+
+                    if(Array.isArray(result)){
+                        result.forEach((res)=>{
+                            constructMetricPayload(res.value,res.facets)
+                        })
+                    }
+                    else {
+                        constructMetricPayload(result)
+                    }
+
+                     
                 } else {
                     FAILED_REQUESTS++
                     log(`Task '${task.name}' failed, no field returned by selector '${task.selector}' in json:  ${JSON.stringify(resultData)}`)
