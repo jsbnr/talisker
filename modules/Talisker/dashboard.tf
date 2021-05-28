@@ -84,7 +84,7 @@ resource "newrelic_one_dashboard" "dashboard" {
       column = 7
       width = 6
       nrql_query {
-        query       = "SELECT * from NrIntegrationError where metricNameSample like '${var.nameSpace}.%'"
+        query       = "SELECT * from NrIntegrationError where metricNameSample like '${var.nameSpace}.%' since 1 days ago"
       }
     }
 
