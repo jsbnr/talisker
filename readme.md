@@ -1,3 +1,8 @@
+**This project has moved to [here](https://github.com/newrelic-experimental/talisker)**
+
+---
+
+
 # Talisker - NRDB NRQL Alerting Engine
 The Talisker engine allows you to alert on NRQL queries longer than the 2 hour streaming alerts limit. The engine runs within the New Relic Synthetic Monitor container and can be confifured with a simple JSON configuration.
 
