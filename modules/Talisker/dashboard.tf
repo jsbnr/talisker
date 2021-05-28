@@ -59,6 +59,7 @@ resource "newrelic_one_dashboard" "dashboard" {
     widget_table  {
       title = "Latest values"
       row = 2
+      height = 6
       column = 1
       width = 6
       nrql_query {
@@ -73,6 +74,17 @@ resource "newrelic_one_dashboard" "dashboard" {
       width = 6
       nrql_query {
         query       = "SELECT custom.failureDetail as 'Failure detail' from SyntheticCheck  since 2 hours ago where result='FAILED' and monitorId='${newrelic_synthetics_monitor.monitor.id}'"
+      }
+    }
+
+    # Row 3
+    widget_table  {
+      title = "Integration errors"
+      row = 3
+      column = 7
+      width = 6
+      nrql_query {
+        query       = "SELECT * from NrIntegrationError where metricNameSample like '${var.nameSpace}.%'"
       }
     }
 
