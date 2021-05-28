@@ -220,17 +220,33 @@ async function runtasks(tasks) {
                         result=bodyJSON.data.actor.account.nrql.results.map((result)=>{
 
                             let facetArr={}
+
                             bodyJSON.data.actor.account.nrql.metadata.facets.forEach((facet,idx)=>{
-                                if(result.facet[idx]!==null) {facetArr[`${NAMESPACE}.facet.${facet}`]=result.facet[idx]} //dont send null values
+
+                                if(bodyJSON.data.actor.account.nrql.metadata.facets.length > 1) {
+                                    if(result.facet[idx]!==null) {
+                                        facetArr[`${NAMESPACE}.facet.${facet}`]=result.facet[idx]
+                                    } 
+                                } else {
+                                    //single facets have a different shape to multi facets!
+                                    if(result.facet!==null) {
+                                        facetArr[`${NAMESPACE}.facet.${facet}`]=result.facet
+                                    } 
+                                }
+
                             })
-                            
+                           
+                            let resultValue=_.get(result,task.selector)
+                            if (resultValue==undefined) {
+                                console.log(`Error: Selector '${task.selector}' was not found in ${JSON.stringify(result)}`)
+                            }
                             return {
-                                value: result.value,
+                                value: resultValue,
                                 facets: facetArr
                             }
                         })
                         
-     
+                        
                 } else {
                      //simple single result data
                     resultData=bodyJSON.data.actor.account.nrql.results[0]
@@ -298,7 +314,9 @@ async function runtasks(tasks) {
 
                     if(Array.isArray(result)){
                         result.forEach((res)=>{
-                            constructMetricPayload(res.value,res.facets)
+                            if(res.value!==undefined) {
+                                constructMetricPayload(res.value,res.facets)
+                            } 
                         })
                     }
                     else {
